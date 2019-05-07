@@ -206,7 +206,7 @@ def pfit_until_convergence(learner, is_classif, XEXfit, yfit, info,
 
 def _cost_fn(argd, X, y, EX_list, valid_size, n_folds, shuffle, random_state,
              use_partial_fit, info, timeout, _conn, loss_fn=None,
-             continuous_loss_fn=False, best_loss=None):
+             continuous_loss_fn=False, best_loss=None, cv_iter=None):
     '''Calculate the loss function
     '''
     try:
@@ -228,72 +228,73 @@ def _cost_fn(argd, X, y, EX_list, valid_size, n_folds, shuffle, random_state,
         # -- N.B. modify argd['preprocessing'] in-place
 
         # Determine cross-validation iterator.
-        if n_folds is not None:
-            if n_folds == -1:
-                info('Will use leave-one-out CV')
-                try:
-                    cv_iter = LeaveOneOut().split(X)
-                except TypeError:
-                    # Older syntax before sklearn version 0.18
-                    cv_iter = LeaveOneOut(len(y))
-            elif is_classif:
-                info('Will use stratified K-fold CV with K:', n_folds,
-                     'and Shuffle:', shuffle)
-                try:
-                    cv_iter = StratifiedKFold(n_splits=n_folds,
-                                              shuffle=shuffle,
-                                              random_state=random_state
-                                             ).split(X, y)
-                except TypeError:
-                    # Older syntax before sklearn version 0.18
-                    cv_iter = StratifiedKFold(y, n_folds=n_folds,
-                                              shuffle=shuffle,
-                                              random_state=random_state)
+        if cv_iter is None:
+            if n_folds is not None:
+                if n_folds == -1:
+                    info('Will use leave-one-out CV')
+                    try:
+                        cv_iter = LeaveOneOut().split(X)
+                    except TypeError:
+                        # Older syntax before sklearn version 0.18
+                        cv_iter = LeaveOneOut(len(y))
+                elif is_classif:
+                    info('Will use stratified K-fold CV with K:', n_folds,
+                         'and Shuffle:', shuffle)
+                    try:
+                        cv_iter = StratifiedKFold(n_splits=n_folds,
+                                                  shuffle=shuffle,
+                                                  random_state=random_state
+                                                 ).split(X, y)
+                    except TypeError:
+                        # Older syntax before sklearn version 0.18
+                        cv_iter = StratifiedKFold(y, n_folds=n_folds,
+                                                  shuffle=shuffle,
+                                                  random_state=random_state)
+                else:
+                    info('Will use K-fold CV with K:', n_folds,
+                         'and Shuffle:', shuffle)
+                    try:
+                        cv_iter = KFold(n_splits=n_folds,
+                                        shuffle=shuffle,
+                                        random_state=random_state).split(X)
+                    except TypeError:
+                        # Older syntax before sklearn version 0.18
+                        cv_iter = KFold(len(y), n_folds=n_folds,
+                                        shuffle=shuffle,
+                                        random_state=random_state)
             else:
-                info('Will use K-fold CV with K:', n_folds,
-                     'and Shuffle:', shuffle)
-                try:
-                    cv_iter = KFold(n_splits=n_folds,
-                                    shuffle=shuffle,
-                                    random_state=random_state).split(X)
-                except TypeError:
-                    # Older syntax before sklearn version 0.18
-                    cv_iter = KFold(len(y), n_folds=n_folds,
-                                    shuffle=shuffle,
-                                    random_state=random_state)
-        else:
-            if not shuffle:  # always choose the last samples.
-                info('Will use the last', valid_size, 
-                     'portion of samples for validation')
-                n_train = int(len(y) * (1 - valid_size))
-                valid_fold = np.ones(len(y), dtype=np.int)
-                valid_fold[:n_train] = -1  # "-1" indicates train fold.
-                try:
-                    cv_iter = PredefinedSplit(valid_fold).split()
-                except TypeError:
-                    # Older syntax before sklearn version 0.18
-                    cv_iter = PredefinedSplit(valid_fold)
-            elif is_classif:
-                info('Will use stratified shuffle-and-split with validation \
-                      portion:', valid_size)
-                try:
-                    cv_iter = StratifiedShuffleSplit(1, test_size=valid_size,
-                                                     random_state=random_state
-                                                    ).split(X, y)
-                except TypeError:
-                    # Older syntax before sklearn version 0.18
-                    cv_iter = StratifiedShuffleSplit(y, 1, test_size=valid_size,
-                                                     random_state=random_state)
-            else:
-                info('Will use shuffle-and-split with validation portion:', 
-                     valid_size)
-                try:
-                    cv_iter = ShuffleSplit(n_splits=1, test_size=valid_size,
-                                           random_state=random_state).split(X)
-                except TypeError:
-                    # Older syntax before sklearn version 0.18
-                    cv_iter = ShuffleSplit(len(y), 1, test_size=valid_size,
-                                           random_state=random_state)
+                if not shuffle:  # always choose the last samples.
+                    info('Will use the last', valid_size,
+                         'portion of samples for validation')
+                    n_train = int(len(y) * (1 - valid_size))
+                    valid_fold = np.ones(len(y), dtype=np.int)
+                    valid_fold[:n_train] = -1  # "-1" indicates train fold.
+                    try:
+                        cv_iter = PredefinedSplit(valid_fold).split()
+                    except TypeError:
+                        # Older syntax before sklearn version 0.18
+                        cv_iter = PredefinedSplit(valid_fold)
+                elif is_classif:
+                    info('Will use stratified shuffle-and-split with validation \
+                          portion:', valid_size)
+                    try:
+                        cv_iter = StratifiedShuffleSplit(1, test_size=valid_size,
+                                                         random_state=random_state
+                                                        ).split(X, y)
+                    except TypeError:
+                        # Older syntax before sklearn version 0.18
+                        cv_iter = StratifiedShuffleSplit(y, 1, test_size=valid_size,
+                                                         random_state=random_state)
+                else:
+                    info('Will use shuffle-and-split with validation portion:',
+                         valid_size)
+                    try:
+                        cv_iter = ShuffleSplit(n_splits=1, test_size=valid_size,
+                                               random_state=random_state).split(X)
+                    except TypeError:
+                        # Older syntax before sklearn version 0.18
+                        cv_iter = ShuffleSplit(len(y), 1, test_size=valid_size,
+                                               random_state=random_state)
 
         # Use the above iterator for cross-validation prediction.
         cv_y_pool = np.array([])
@@ -344,6 +345,11 @@ def _cost_fn(argd, X, y, EX_list, valid_size, n_folds, shuffle, random_state,
                          100 * (1 - loss),
                          100 * np.sqrt(lossvar))
                     )
+
+                    print(('OK trial with accuracy %.1f +- %.1f' % (
+                         100 * (1 - loss),
+                         100 * np.sqrt(lossvar))))
+
                 else:
                     loss = 1 - r2_score(cv_y_pool, cv_pred_pool)
                     lossvar = None  # variance of R2 is undefined.
@@ -444,7 +450,7 @@ class hyperopt_estimator(BaseEstimator):
                  fit_increment_dump_filename=None,
                  seed=None,
                  use_partial_fit=False,
-                 refit=True,
+                 cv_iter=None
                  ):
         """
         Parameters
@@ -512,9 +518,6 @@ class hyperopt_estimator(BaseEstimator):
             batches here. The partial fit is used to iteratively update 
             parameters on the whole train set. Early stopping is used to kill 
             the training when the validation score stops improving.
-
-        refit: boolean, default True
-            Refit the best model on the whole data set.
         """
         self.max_evals = max_evals
         self.loss_fn = loss_fn
@@ -524,7 +527,8 @@ class hyperopt_estimator(BaseEstimator):
         self.fit_increment = fit_increment
         self.fit_increment_dump_filename = fit_increment_dump_filename
         self.use_partial_fit = use_partial_fit
-        self.refit = refit
+        self.cv_iter = cv_iter
+
         if space is None:
             if classifier is None and regressor is None:
                 self.classification = True
@@ -630,7 +634,8 @@ class hyperopt_estimator(BaseEstimator):
                      info=self.info,
                      timeout=self.trial_timeout,
                      loss_fn=self.loss_fn,
-                     continuous_loss_fn=self.continuous_loss_fn)
+                     continuous_loss_fn=self.continuous_loss_fn,
+                     cv_iter=self.cv_iter)
 
         # Wrap up the cost function as a process with timeout control.
         def fn_with_timeout(*args, **kwargs):
@@ -731,7 +736,7 @@ class hyperopt_estimator(BaseEstimator):
             self._best_learner.fit(XEX, y)
 
     def fit(self, X, y, EX_list=None, 
-            valid_size=.2, n_folds=None, 
+            valid_size=.2, n_folds=None,
             cv_shuffle=False, warm_start=False,
             random_state=np.random.RandomState(),
             weights=None):
@@ -788,8 +793,7 @@ class hyperopt_estimator(BaseEstimator):
             except KeyboardInterrupt:
                 break
 
-        if self.refit:
-            self.retrain_best_model_on_full_data(X, y, EX_list, weights)
+        self.retrain_best_model_on_full_data(X, y, EX_list, weights)
 
     def predict(self, X, EX_list=None):
         """
